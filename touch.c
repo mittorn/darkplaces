@@ -20,8 +20,7 @@ GNU General Public License for more details.
 #include <SDL_keyboard.h>
 #endif
 
-typedef unsigned char byte;
-typedef byte		rgba_t[4];
+typedef unsigned char		rgba_t[4];
 #define TOUCH_FL_HIDE			(1U << 0)
 #define TOUCH_FL_NOEDIT			(1U << 1)
 #define TOUCH_FL_CLIENT			(1U << 2)
@@ -32,7 +31,6 @@ typedef byte		rgba_t[4];
 #define TOUCH_FL_DRAW_ADDITIVE	(1U << 7)
 #define TOUCH_FL_STROKE			(1U << 8)
 #define TOUCH_FL_PRECISION		(1U << 9)
-#define FILL_IMAGE 0
 char vabuf[256];
 
 typedef enum
@@ -133,53 +131,38 @@ struct touch_s
 	qboolean precision;
 	// textures
 	cachepic_t *joytexture; // touch indicator
+	cachepic_t *fillImage;
 	qboolean configchanged;
-} touch;
-#define MakeRGBA( out, x, y, z, w ) Vector4Set( out, x, y, z, w )
-#define Msg Con_Printf
-#define Cmd_RemoveCommand(x)
-#define Cvar_SetFloat Cvar_SetValue
-#define Q_atoi atoi
-#define Q_snprintf dpsnprintf
-#undef strcpy
-#define Q_strcpy strcpy
-#define BF ((float)1.0f/255)
-#define Q_strcmp strcmp
-#define Q_strncmp strncmp
-#define Q_strstr strstr
-#define Q_strncpy strlcpy
-#define Q_atof atof
-#define Q_memcpy memcpy
-#define Q_memcmp memcmp
-#define CL_GetMaxClients() svs.maxclients
+	float saved_r, saved_g, saved_b, saved_a;
+	qboolean additive;
 
-int Q_stricmpext(const char *p, const char *s)
+} touch;
+
+#define BF ((float)1.0f/255)
+
+
+int Touch_ComparePattern( const char *p, const char *s )
 {
 	if( p[0] == '*' )
 	return !!strstr(s, p+1);
 	return !strncmp(p, s, strlen(p));
 }
 
-int Con_DrawString(int x, int y, const char *s, rgba_t c)
+int Touch_DrawString( int x, int y, const char *s, rgba_t c )
 {
 	return DrawQ_String(x,y,s,0,8,8, BF*c[0],BF*c[1], BF*c[2], BF*c[3],0, NULL, false, FONT_DEFAULT);
 }
-float r,g,b,a;
-void R_DrawStretchPic(int x, int y, int w, int h, int t1, int s1, int t2, int s2, cachepic_t *t)
+
+void Touch_FillRect(int x, int y, int w, int h )
 {
-	if( (int)t == -1 )
-		return;
-	if( t == FILL_IMAGE )
-		DrawQ_Fill(x,y,w,h,r,g,b,a,0);
-	else
-		DrawQ_Pic(x,y,t,w,h,r,g,b,a,0);
+	DrawQ_Pic( x,y,touch.fillImage,w,h,touch.saved_r,touch.saved_g,touch.saved_b,touch.saved_a, 0 );
 }
 
-void pglColor4ub(int r1, int g1, int b1, int a1)
+void Touch_SetRectColor(int r1, int g1, int b1, int a1)
 {
-	r = (float)r1/255.0f, g = (float)g1/255.0f, b = (float)b1 / 255.0f, a = (float)a1/255.0f;
+	touch.saved_r = (float)r1/255.0f, touch.saved_g = (float)g1/255.0f, touch.saved_b = (float)b1 / 255.0f, touch.saved_a = (float)a1/255.0f;
 }
-#define GL_SetRenderMode(x)
+
 touchdefaultbutton_t g_DefaultButtons[256];
 int g_LastDefaultButton;
 
@@ -213,7 +196,6 @@ cvar_t *touch_joy_texture;
 #define TO_SCRN_Y(x) (vid_conheight.integer * (x))
 #define TO_SCRN_X(x) (vid_conwidth.integer * (x))
 
-int pfnDrawCharacter( int x, int y, int number, int r, int g, int b );
 static void IN_TouchCheckCoords( float *x1, float *y1, float *x2, float *y2  );
 
 void Touch_WriteConfig( void )
@@ -225,7 +207,7 @@ void Touch_WriteConfig( void )
 	if( COM_CheckParm( "-nowriteconfig" ) || !touch.configchanged )
 		return;
 
-	Msg( "IN_TouchWriteConfig(): %s\n", touch_config_file->string );
+	Con_Printf( "IN_TouchWriteConfig(): %s\n", touch_config_file->string );
 
 	f = FS_OpenRealFile( touch_config_file->string, "w", true );
 	if( f )
@@ -289,7 +271,7 @@ void Touch_WriteConfig( void )
 
 		FS_Close( f );
 	}
-	else Msg( "Couldn't write %s.\n", touch_config_file->string );
+	else Con_Printf( "Couldn't write %s.\n", touch_config_file->string );
 }
 
 void Touch_ExportConfig_f( void )
@@ -299,7 +281,7 @@ void Touch_ExportConfig_f( void )
 
 	if( Cmd_Argc() != 2 )
 	{
-		Msg( "Usage: touch_exportconfig <name>\n" );
+		Con_Printf( "Usage: touch_exportconfig <name>\n" );
 		return;
 	}
 
@@ -307,12 +289,10 @@ void Touch_ExportConfig_f( void )
 
 	name = Cmd_Argv( 1 );
 
-	Msg( "Exporting config to %s\n", name );
+	Con_Printf( "Exporting config to %s\n", name );
 	f = FS_OpenRealFile( name, "w", true );
 	if( f )
 	{
-		char profilename[256];
-		char profilebase[256];
 		touch_button_t *button;
 #if 0
 		if( Q_strstr( name, "touch_presets/" ) )
@@ -381,7 +361,7 @@ void Touch_ExportConfig_f( void )
 		FS_Printf( f, "touch_roundall\n" );
 		FS_Close( f );
 	}
-	else Msg( "Couldn't write %s.\n", name );
+	else Con_Printf( "Couldn't write %s.\n", name );
 }
 
 void Touch_GenetateCode_f( void )
@@ -391,7 +371,7 @@ void Touch_GenetateCode_f( void )
 
 	if( Cmd_Argc() != 1 )
 	{
-		Msg( "Usage: touch_generate_code\n" );
+		Con_Printf( "Usage: touch_generate_code\n" );
 		return;
 	}
 
@@ -409,12 +389,12 @@ void Touch_GenetateCode_f( void )
 			flags |= TOUCH_FL_HIDE;
 
 		aspect = ( B(y2) - B(y1) ) / ( ( B(x2) - B(x1) ) /(SCR_H/SCR_W) );
-		if( Q_memcmp( &c, &B(color), sizeof( rgba_t ) ) )
+		if( memcmp( &c, &B(color), sizeof( rgba_t ) ) )
 		{
-			Msg( "unsigned char color[] = { %d, %d, %d, %d };\n", B(color[0]), B(color[1]), B(color[2]), B(color[3]) );
-			Q_memcpy( &c, &B(color), sizeof( rgba_t ) );
+			Con_Printf( "unsigned char color[] = { %d, %d, %d, %d };\n", B(color[0]), B(color[1]), B(color[2]), B(color[3]) );
+			memcpy( &c, &B(color), sizeof( rgba_t ) );
 		}
-		Msg( "TOUCH_ADDDEFAULT( \"%s\", \"%s\", \"%s\", %f, %f, %f, %f, color, %d, %f, %d );\n",
+		Con_Printf( "TOUCH_ADDDEFAULT( \"%s\", \"%s\", \"%s\", %f, %f, %f, %f, color, %d, %f, %d );\n",
 			B(name), B(texturefile), B(command),
 			B(x1), B(y1), B(x2), B(y2), (B(type) == touch_command)?(fabs( aspect  - 1.0f) < 0.0001)?2:1:0, aspect, flags );
 	}
@@ -434,7 +414,7 @@ void Touch_ListButtons_f( void )
 	touch_button_t *button;
 	for( button = touch.list_user.first; button; button = button->next )
 	{
-		Msg( "%s %s %s %f %f %f %f %d %d %d %d %d\n", 
+		Con_Printf( "%s %s %s %f %f %f %f %d %d %d %d %d\n",
 			B(name), B(texturefile), B(command),
 			B(x1), B(y1), B(x2), B(y2),
 			B(color[0]), B(color[1]), B(color[2]), B(color[3]), B(flags) );
@@ -447,8 +427,8 @@ void Touch_ListButtons_f( void )
 
 void Touch_Stroke_f( void )
 {
-	touch.swidth = Q_atoi( Cmd_Argv( 1 ) );
-	MakeRGBA( touch.scolor, Q_atoi( Cmd_Argv( 2 ) ), Q_atoi( Cmd_Argv( 3 ) ), Q_atoi( Cmd_Argv( 4 ) ), Q_atoi( Cmd_Argv( 5 ) ) );
+	touch.swidth = atoi( Cmd_Argv( 1 ) );
+	Vector4Set( touch.scolor, atoi( Cmd_Argv( 2 ) ), atoi( Cmd_Argv( 3 ) ), atoi( Cmd_Argv( 4 ) ), atoi( Cmd_Argv( 5 ) ) );
 }
 
 touch_button_t *Touch_FindButton( touchbuttonlist_t *list, const char *name )
@@ -456,7 +436,7 @@ touch_button_t *Touch_FindButton( touchbuttonlist_t *list, const char *name )
 	touch_button_t *button;
 
 	for ( button = list->first; button; button = button->next )
-		if( !Q_strncmp( button->name, name, 32 ) )
+		if( !strncmp( button->name, name, 32 ) )
 			return button;
 	return NULL;
 }
@@ -466,7 +446,7 @@ touch_button_t *Touch_FindFirst( touchbuttonlist_t *list, const char *name )
 	touch_button_t *button;
 
 	for ( button = list->first; button; button = button->next )
-		if( ( Q_strstr( name, "*" ) && Q_stricmpext( name, button->name ) ) || !Q_strncmp( name, button->name, 32 ) )
+		if( ( strstr( name, "*" ) && Touch_ComparePattern( name, button->name ) ) || !strncmp( name, button->name, 32 ) )
 			return button;
 	return NULL;
 }
@@ -496,7 +476,7 @@ void Touch_SetClientOnly( qboolean state )
 
 void Touch_SetClientOnly_f( void )
 {
-	Touch_SetClientOnly( Q_atoi( Cmd_Argv( 1 ) ) );
+	Touch_SetClientOnly( atoi( Cmd_Argv( 1 ) ) );
 }
 
 void Touch_RemoveButtonFromList( touchbuttonlist_t *list, const char *name )
@@ -547,13 +527,13 @@ void Touch_RemoveAll_f( void )
 	Touch_ClearList( &touch.list_user );
 }
 
-void Touch_SetColor( touchbuttonlist_t *list, const char *name, byte *color )
+void Touch_SetColor( touchbuttonlist_t *list, const char *name, unsigned char *color )
 {
 	touch_button_t *button;
 	for( button = list->first; button; button = button->next )
 	{
-		if( ( Q_strstr( name, "*" ) && Q_stricmpext( name, button->name ) ) || !Q_strncmp( name, button->name, 32 ) )
-			MakeRGBA( button->color, color[0], color[1], color[2], color[3] );
+		if( ( strstr( name, "*" ) && Touch_ComparePattern( name, button->name ) ) || !strncmp( name, button->name, 32 ) )
+			Vector4Set( button->color, color[0], color[1], color[2], color[3] );
 	}
 }
 
@@ -563,7 +543,7 @@ void Touch_SetTexture( touchbuttonlist_t *list, const char *name, const char *te
 	if( !button )
 		return;
 	button->texture = -1; // mark for texture load
-	Q_strncpy( button->texturefile, texture, sizeof( button->texturefile ) );
+	strlcpy( button->texturefile, texture, sizeof( button->texturefile ) );
 }
 
 void Touch_SetCommand( touchbuttonlist_t *list, const char *name, const char *command )
@@ -573,16 +553,16 @@ void Touch_SetCommand( touchbuttonlist_t *list, const char *name, const char *co
 	if( !button )
 		return;
 
-	if( !Q_strcmp( command, "_look" ) )
+	if( !strcmp( command, "_look" ) )
 		button->type = touch_look;
-	if( !Q_strcmp( command, "_move" ) )
+	if( !strcmp( command, "_move" ) )
 		button->type = touch_move;
-	if( !Q_strcmp( command, "_joy" ) )
+	if( !strcmp( command, "_joy" ) )
 		button->type = touch_joy;
-	if( !Q_strcmp( command, "_dpad" ) )
+	if( !strcmp( command, "_dpad" ) )
 		button->type = touch_dpad;
 
-	Q_strncpy( button->command, command, sizeof( button->command ) );
+	strlcpy( button->command, command, sizeof( button->command ) );
 }
 
 void Touch_HideButtons( const char *name, qboolean hide )
@@ -591,7 +571,7 @@ void Touch_HideButtons( const char *name, qboolean hide )
 
 	for( button = touch.list_user.first; button; button = button->next)
 	{
-		if( ( Q_strstr( name, "*" ) && Q_stricmpext( name, button->name ) ) || !Q_strncmp( name, button->name, 32 ) )
+		if( ( strstr( name, "*" ) && Touch_ComparePattern( name, button->name ) ) || !strncmp( name, button->name, 32 ) )
 		{
 			if( hide )
 				button->flags |= TOUCH_FL_HIDE;
@@ -623,7 +603,7 @@ void Touch_FadeButtons( touchbuttonlist_t *list, const char *name, float speed, 
 	touch_button_t *button;
 	for( button = list->first; button; button = button->next)
 	{
-		if( ( Q_strstr( name, "*" ) && Q_stricmpext( name, button->name ) ) || !Q_strncmp( name, button->name, 32 ) )
+		if( ( strstr( name, "*" ) && Touch_ComparePattern( name, button->name ) ) || !strncmp( name, button->name, 32 ) )
 		{
 			if( start >= 0 )
 				button->fade = start;
@@ -638,8 +618,8 @@ void Touch_Fade_f( void )
 	if( Cmd_Argc() < 4 )
 		return;
 	if( Cmd_Argc() > 4 )
-		start = Q_atof( Cmd_Argv( 4 ) );
-	Touch_FadeButtons( &touch.list_user, Cmd_Argv( 1 ), Q_atof( Cmd_Argv( 2 )), Q_atof( Cmd_Argv( 3 )), start );
+		start = atof( Cmd_Argv( 4 ) );
+	Touch_FadeButtons( &touch.list_user, Cmd_Argv( 1 ), atof( Cmd_Argv( 2 )), atof( Cmd_Argv( 3 )), start );
 }
 
 void Touch_SetColor_f( void )
@@ -647,11 +627,11 @@ void Touch_SetColor_f( void )
 	rgba_t color;
 	if( Cmd_Argc() == 6 )
 	{
-		MakeRGBA( color,  Q_atoi( Cmd_Argv(2) ), Q_atoi( Cmd_Argv(3) ), Q_atoi( Cmd_Argv(4) ), Q_atoi( Cmd_Argv(5) ) );
+		Vector4Set( color,  atoi( Cmd_Argv(2) ), atoi( Cmd_Argv(3) ), atoi( Cmd_Argv(4) ), atoi( Cmd_Argv(5) ) );
 		Touch_SetColor( &touch.list_user, Cmd_Argv(1), color );
 		return;
 	}
-	Msg( "Usage: touch_setcolor <pattern> <r> <g> <b> <a>\n" );
+	Con_Printf( "Usage: touch_setcolor <pattern> <r> <g> <b> <a>\n" );
 }
 
 void Touch_SetTexture_f( void )
@@ -661,7 +641,7 @@ void Touch_SetTexture_f( void )
 		Touch_SetTexture( &touch.list_user, Cmd_Argv( 1 ), Cmd_Argv( 2 ) );
 		return;
 	}
-	Msg( "Usage: touch_settexture <name> <file>\n" );
+	Con_Printf( "Usage: touch_settexture <name> <file>\n" );
 }
 
 void Touch_SetFlags_f( void )
@@ -670,10 +650,10 @@ void Touch_SetFlags_f( void )
 	{
 		touch_button_t *button = Touch_FindButton( &touch.list_user, Cmd_Argv( 1 ) );
 		if( button )
-			button->flags = Q_atoi( Cmd_Argv( 2 ) );
+			button->flags = atoi( Cmd_Argv( 2 ) );
 		return;
 	}
-	Msg( "Usage: touch_setflags <name> <file>\n" );
+	Con_Printf( "Usage: touch_setflags <name> <file>\n" );
 }
 
 void Touch_SetCommand_f( void )
@@ -683,7 +663,7 @@ void Touch_SetCommand_f( void )
 		Touch_SetCommand( &touch.list_user, Cmd_Argv( 1 ), Cmd_Argv( 2 ) );
 		return;
 	}
-	Msg( "Usage: touch_command <name> <command>\n" );
+	Con_Printf( "Usage: touch_command <name> <command>\n" );
 }
 void Touch_ReloadConfig_f( void )
 {
@@ -698,33 +678,33 @@ void Touch_ReloadConfig_f( void )
 	Cbuf_AddText( va(vabuf,256,"exec %s\n", touch_config_file->string ) );
 }
 
-touch_button_t *Touch_AddButton( touchbuttonlist_t *list, const char *name,  const char *texture, const char *command, float x1, float y1, float x2, float y2, byte *color )
+touch_button_t *Touch_AddButton( touchbuttonlist_t *list, const char *name,  const char *texture, const char *command, float x1, float y1, float x2, float y2, unsigned char *color )
 {
 	touch_button_t *button = Mem_Alloc( touch.mempool, sizeof( touch_button_t ) );
 	button->texture = -1;
-	Q_strncpy( button->texturefile, texture, sizeof( button->texturefile ) );
-	Q_strncpy( button->name, name, 32 );
+	strlcpy( button->texturefile, texture, sizeof( button->texturefile ) );
+	strlcpy( button->name, name, 32 );
 	Touch_RemoveButtonFromList( list, name ); //replace if exist
 	button->x1 = x1;
 	button->y1 = y1;
 	button->x2 = x2;
 	button->y2 = y2;
-	MakeRGBA( button->color, color[0], color[1], color[2], color[3] );
+	Vector4Set( button->color, color[0], color[1], color[2], color[3] );
 	button->command[0] = 0;
 	button->flags = 0;
 	button->fade = 1;
 
 	// check keywords
-	if( !Q_strcmp( command, "_look" ) )
+	if( !strcmp( command, "_look" ) )
 		button->type = touch_look;
-	if( !Q_strcmp( command, "_move" ) )
+	if( !strcmp( command, "_move" ) )
 		button->type = touch_move;
-	if( !Q_strcmp( command, "_joy" ) )
+	if( !strcmp( command, "_joy" ) )
 		button->type = touch_joy;
-	if( !Q_strcmp( command, "_dpad" ) )
+	if( !strcmp( command, "_dpad" ) )
 		button->type = touch_dpad;
 
-	Q_strncpy( button->command, command, sizeof( button->command ) );
+	strlcpy( button->command, command, sizeof( button->command ) );
 	button->finger = -1;
 	button->next = NULL;
 	button->prev = list->last;
@@ -738,7 +718,7 @@ touch_button_t *Touch_AddButton( touchbuttonlist_t *list, const char *name,  con
 	return button;
 }
 
-void Touch_AddClientButton( const char *name, const char *texture, const char *command, float x1, float y1, float x2, float y2, byte *color, int round, float aspect, int flags )
+void Touch_AddClientButton( const char *name, const char *texture, const char *command, float x1, float y1, float x2, float y2, unsigned char *color, int round, float aspect, int flags )
 {
 	touch_button_t *button;
 
@@ -785,18 +765,18 @@ void Touch_LoadDefaults_f( void )
 
 
 // Add default button from client
-void Touch_AddDefaultButton( const char *name, const char *texturefile, const char *command, float x1, float y1, float x2, float y2, byte *color, int round, float aspect, int flags )
+void Touch_AddDefaultButton( const char *name, const char *texturefile, const char *command, float x1, float y1, float x2, float y2, unsigned char *color, int round, float aspect, int flags )
 {
 	if( g_LastDefaultButton >= 255 )
 		return;
-	Q_strncpy( g_DefaultButtons[g_LastDefaultButton].name, name, 32 );
-	Q_strncpy( g_DefaultButtons[g_LastDefaultButton].texturefile, texturefile, 256 );
-	Q_strncpy( g_DefaultButtons[g_LastDefaultButton].command, command, 256 );
+	strlcpy( g_DefaultButtons[g_LastDefaultButton].name, name, 32 );
+	strlcpy( g_DefaultButtons[g_LastDefaultButton].texturefile, texturefile, 256 );
+	strlcpy( g_DefaultButtons[g_LastDefaultButton].command, command, 256 );
 	g_DefaultButtons[g_LastDefaultButton].x1 = x1;
 	g_DefaultButtons[g_LastDefaultButton].y1 = y1;
 	g_DefaultButtons[g_LastDefaultButton].x2 = x2;
 	g_DefaultButtons[g_LastDefaultButton].y2 = y2;
-	MakeRGBA( g_DefaultButtons[g_LastDefaultButton].color, color[0], color[1], color[2], color[3] );
+	Vector4Set( g_DefaultButtons[g_LastDefaultButton].color, color[0], color[1], color[2], color[3] );
 	g_DefaultButtons[g_LastDefaultButton].round = round;
 	g_DefaultButtons[g_LastDefaultButton].aspect = aspect;
 	g_DefaultButtons[g_LastDefaultButton].flags = flags;
@@ -816,19 +796,19 @@ void Touch_AddButton_f( void )
 	if( argc >= 12 )
 	{
 		touch_button_t *button;
-		MakeRGBA( color, Q_atoi( Cmd_Argv(8) ), Q_atoi( Cmd_Argv(9) ), 
-			Q_atoi( Cmd_Argv(10) ), Q_atoi( Cmd_Argv(11) ) );
+		Vector4Set( color, atoi( Cmd_Argv(8) ), atoi( Cmd_Argv(9) ),
+			atoi( Cmd_Argv(10) ), atoi( Cmd_Argv(11) ) );
 		button = Touch_AddButton( &touch.list_user, Cmd_Argv(1), Cmd_Argv(2), Cmd_Argv(3),
-			Q_atof( Cmd_Argv(4) ), Q_atof( Cmd_Argv(5) ), 
-			Q_atof( Cmd_Argv(6) ), Q_atof( Cmd_Argv(7) ) ,
+			atof( Cmd_Argv(4) ), atof( Cmd_Argv(5) ),
+			atof( Cmd_Argv(6) ), atof( Cmd_Argv(7) ) ,
 			color );
 		if( argc >= 13 )
-			button->flags = Q_atoi( Cmd_Argv(12) );
+			button->flags = atoi( Cmd_Argv(12) );
 		if( argc >= 14 )
 		{
 			// Recalculate button coordinates aspect ratio
 			// This is feature for distributed configs
-			float aspect = Q_atof( Cmd_Argv(13) );
+			float aspect = atof( Cmd_Argv(13) );
 			if( aspect )
 			{
 				if( B(texturefile)[0] != '#' )
@@ -841,20 +821,20 @@ void Touch_AddButton_f( void )
 	}	
 	if( argc == 8 )
 	{
-		MakeRGBA( color, 255, 255, 255, 255 );
+		Vector4Set( color, 255, 255, 255, 255 );
 		Touch_AddButton( &touch.list_user, Cmd_Argv(1), Cmd_Argv(2), Cmd_Argv(3),
-			Q_atof( Cmd_Argv(4) ), Q_atof( Cmd_Argv(5) ), 
-			Q_atof( Cmd_Argv(6) ), Q_atof( Cmd_Argv(7) ),
+			atof( Cmd_Argv(4) ), atof( Cmd_Argv(5) ),
+			atof( Cmd_Argv(6) ), atof( Cmd_Argv(7) ),
 			color );
 		return;
 	}
 	if( argc == 4 )
 	{
-		MakeRGBA( color, 255, 255, 255, 255 );
+		Vector4Set( color, 255, 255, 255, 255 );
 		Touch_AddButton( &touch.list_user, Cmd_Argv(1), Cmd_Argv(2), Cmd_Argv(3), 0.4, 0.4, 0.6, 0.6, color );
 		return;
 	}
-	Msg( "Usage: touch_addbutton <name> <texture> <command> [<x1> <y1> <x2> <y2> [ r g b a ] ]\n" );
+	Con_Printf( "Usage: touch_addbutton <name> <texture> <command> [<x1> <y1> <x2> <y2> [ r g b a ] ]\n" );
 }
 
 void Touch_EnableEdit_f( void )
@@ -888,7 +868,7 @@ void Touch_DeleteProfile_f( void )
 {
 	if( Cmd_Argc() != 2 )
 	{
-		Msg( "Usage: touch_deleteprofile <name>\n" );
+		Con_Printf( "Usage: touch_deleteprofile <name>\n" );
 		return;
 	}
 
@@ -903,13 +883,13 @@ void Touch_InitEditor( void )
 
 	Touch_ClearList( &touch.list_edit );
 
-	Touch_AddButton( &touch.list_edit, "close", "touch_default/edit_close.tga", "touch_disableedit", 0, y, x, y + 0.1, (byte*)"\xff\xff\xff\xff" )->flags |= TOUCH_FL_NOEDIT;
-	Touch_AddButton( &touch.list_edit, "close", "#Close and save", "", x, y, x + 0.2, y + 0.1, (byte*)"\xff\xff\xff\xff" )->flags |= TOUCH_FL_NOEDIT;
+	Touch_AddButton( &touch.list_edit, "close", "touch_default/edit_close.tga", "touch_disableedit", 0, y, x, y + 0.1, (unsigned char*)"\xff\xff\xff\xff" )->flags |= TOUCH_FL_NOEDIT;
+	Touch_AddButton( &touch.list_edit, "close", "#Close and save", "", x, y, x + 0.2, y + 0.1, (unsigned char*)"\xff\xff\xff\xff" )->flags |= TOUCH_FL_NOEDIT;
 	y += 0.2;
-	Touch_AddButton( &touch.list_edit, "cancel", "touch_default/edit_reset.tga", "touch_reloadconfig", 0, y, x, y + 0.1, (byte*)"\xff\xff\xff\xff" )->flags |= TOUCH_FL_NOEDIT;
-	Touch_AddButton( &touch.list_edit, "close", "#Cancel and reset", "", x, y, x + 0.2, y + 0.1, (byte*)"\xff\xff\xff\xff" )->flags |= TOUCH_FL_NOEDIT;
+	Touch_AddButton( &touch.list_edit, "cancel", "touch_default/edit_reset.tga", "touch_reloadconfig", 0, y, x, y + 0.1, (unsigned char*)"\xff\xff\xff\xff" )->flags |= TOUCH_FL_NOEDIT;
+	Touch_AddButton( &touch.list_edit, "close", "#Cancel and reset", "", x, y, x + 0.2, y + 0.1, (unsigned char*)"\xff\xff\xff\xff" )->flags |= TOUCH_FL_NOEDIT;
 	y += 0.2;
-	touch.hidebutton = Touch_AddButton( &touch.list_edit, "showhide", "touch_default/edit_hide.tga", "touch_toggleselection", 0, y, x, y + 0.1, (byte*)"\xff\xff\xff\xff" );
+	touch.hidebutton = Touch_AddButton( &touch.list_edit, "showhide", "touch_default/edit_hide.tga", "touch_toggleselection", 0, y, x, y + 0.1, (unsigned char*)"\xff\xff\xff\xff" );
 	touch.hidebutton->flags |= TOUCH_FL_HIDE | TOUCH_FL_NOEDIT;
 }
 
@@ -920,13 +900,13 @@ void Touch_Init( void )
 		return;
 	touch.mempool = Mem_AllocPool( "Touch", 0, NULL );
 	//touch.first = touch.last = NULL;
-	Msg( "IN_TouchInit()\n");
+	Con_Printf( "IN_TouchInit()\n");
 	touch.move_finger = touch.resize_finger = touch.look_finger = -1;
 	touch.state = state_none;
 	touch.showbuttons = true;
 	touch.clientonly = false;
 	touch.precision = false;
-	MakeRGBA( touch.scolor, 255, 255, 255, 255 );
+	Vector4Set( touch.scolor, 255, 255, 255, 255 );
 	touch.swidth = 1;
 	g_LastDefaultButton = 0;
 
@@ -934,7 +914,7 @@ void Touch_Init( void )
 	touch.list_user.first = touch.list_user.last = NULL;
 
 	// fill default buttons list
-	MakeRGBA( color, 255, 255, 255, 255 );
+	Vector4Set( color, 255, 255, 255, 255 );
 	Touch_AddDefaultButton( "look", "", "_look", 0.500000, 0.000000, 1.000000, 1, color, 0, 0, 0 );
 	Touch_AddDefaultButton( "move", "", "_move", 0.000000, 0.000000, 0.500000, 1, color, 0, 0, 0 );
 	Touch_AddDefaultButton( "invnext", "touch_default/next_weap.tga", "invnext", 0.000000, 0.530200, 0.120000, 0.757428, color, 2, 1, 0 );
@@ -1026,6 +1006,7 @@ void Touch_InitConfig( void )
 
 	Touch_InitEditor();
 	touch.joytexture = Draw_CachePic( touch_joy_texture->string );
+	touch.fillImage = Draw_CachePic("white");
 	touch.configchanged = false;
 }
 qboolean Touch_IsVisible( touch_button_t *button )
@@ -1039,10 +1020,10 @@ qboolean Touch_IsVisible( touch_button_t *button )
 	if( button->flags & TOUCH_FL_HIDE )
 		return false; // skip hidden
 
-	if( button->flags & TOUCH_FL_SP && CL_GetMaxClients() != 1 )
+	if( button->flags & TOUCH_FL_SP && svs.maxclients != 1 )
 		return false; // skip singleplayer(load, save) buttons in multiplayer
 
-	if( button->flags & TOUCH_FL_MP && CL_GetMaxClients() == 1 )
+	if( button->flags & TOUCH_FL_MP && svs.maxclients == 1 )
 		return false; // skip multiplayer buttons in singleplayer
 
 	return true;
@@ -1057,7 +1038,7 @@ qboolean Touch_IsVisible( touch_button_t *button )
 	 */
 }
 
-void Touch_DrawTexture ( float x1, float y1, float x2, float y2, cachepic_t *texture, byte r, byte g, byte b, byte a )
+void Touch_DrawTexture ( float x1, float y1, float x2, float y2, cachepic_t *texture, unsigned char r, unsigned char g, unsigned char b, unsigned char a, qboolean additive )
 {
 	if( x1 >= x2 )
 		return;
@@ -1065,18 +1046,18 @@ void Touch_DrawTexture ( float x1, float y1, float x2, float y2, cachepic_t *tex
 	if( y1 >= y2 )
 		return;
 
-	pglColor4ub( r, g, b, a );
-	R_DrawStretchPic( TO_SCRN_X(x1),
+	DrawQ_Pic( TO_SCRN_X(x1),
 		TO_SCRN_Y(y1),
+		texture,
 		TO_SCRN_X(x2 - x1),
 		TO_SCRN_Y(y2 - y1),
-		0, 0, 1, 1, texture );
+		r,g,b,a, additive?DRAWFLAG_ADDITIVE:0);
 }
 
 #if defined(_MSC_VER) && (_MSC_VER < 1700) 
 static __inline int round(float f)
 {
-    return (int)(f + 0.5);
+	return (int)(f + 0.5);
 
 }
 #endif
@@ -1111,71 +1092,7 @@ static void IN_TouchCheckCoords( float *x1, float *y1, float *x2, float *y2  )
 		*y2 = GRID_ROUND_Y( *y2 );
 	}
 }
-#if 0
-float Touch_DrawCharacter( float x, float y, int number, float size )
-{
-	float	s1, s2, t1, t2, width, height;
-	int	w, h;
-	wrect_t *prc;
-	if( !cls.creditsFont.valid )
-		return 0;
 
-	number &= 255;
-	number = Con_UtfProcessChar( number );
-
-
-	R_GetTextureParms( &w, &h, cls.creditsFont.hFontTexture );
-	prc = &cls.creditsFont.fontRc[number];
-
-	s1 = ((float)prc->left) / (float)w;
-	t1 = ((float)prc->top) / (float)h;
-	s2 = ((float)prc->right) / (float)w;
-	t2 = ((float)prc->bottom) / (float)h;
-
-	width = ((float)( prc->right - prc->left )) / 1024.0f * size;
-	height = ((float)( prc->bottom - prc->top )) / 1024.0f * size;
-
-	R_DrawStretchPic( TO_SCRN_X(x), TO_SCRN_Y(y), TO_SCRN_X(width), TO_SCRN_X(height), s1, t1, s2, t2, cls.creditsFont.hFontTexture );
-	return width;
-}
-
-float Touch_DrawText( float x1, float y1, float x2, float y2, const char *s, byte *color, float size )
-{
-	float x = x1;
-	float maxy = y2;
-	float maxx;
-	if( x2 )
-		maxx = x2 - cls.creditsFont.charWidths['M'] / 1024.0f * size;
-	else
-		maxx = 1;
-	
-	if( !cls.creditsFont.valid )
-		return GRID_X * 2;
-	Con_UtfProcessChar( 0 );
-
-	GL_SetRenderMode( kRenderTransAdd );
-
-	// text is additive and alpha does not work
-	pglColor4ub( color[0] * ( (float)color[3] /255.0f ), color[1] * ( (float)color[3] /255.0f ),
-			color[2] * ( (float)color[3] /255.0f ), 255 );
-
-	while( *s )
-	{
-		while( *s && ( *s != '\n' ) && ( *s != ';' ) && ( x1 < maxx ) )
-			x1 += Touch_DrawCharacter( x1, y1, *s++, size );
-		y1 += cls.creditsFont.charHeight / 1024.f * size / SCR_H * SCR_W;
-
-		if( y1 >= maxy )
-			break;
-
-		if( *s == '\n' || *s == ';' )
-			s++;
-		x1 = x;
-	}
-	GL_SetRenderMode( kRenderTransTexture );
-	return x1;
-}
-#endif
 void Touch_DrawButtons( touchbuttonlist_t *list )
 {
 	touch_button_t *button;
@@ -1185,7 +1102,7 @@ void Touch_DrawButtons( touchbuttonlist_t *list )
 		if( Touch_IsVisible( button ) )
 		{
 			rgba_t color;
-			MakeRGBA( color, B( color[0] ), B( color[1] ), B( color[2] ), B( color[3] ) );
+			Vector4Set( color, B( color[0] ), B( color[1] ), B( color[2] ), B( color[3] ) );
 
 			if( B( fadespeed ) )
 			{
@@ -1208,7 +1125,7 @@ void Touch_DrawButtons( touchbuttonlist_t *list )
 
 			color[3] *= B( fade );
 			if( button->texturefile[0] == '#' )
-				Con_DrawString( touch.swidth/SCR_W + B(x1), touch.swidth/SCR_H + B(y1), button->texturefile + 1, color);
+				Touch_DrawString( touch.swidth/SCR_W + B(x1), touch.swidth/SCR_H + B(y1), button->texturefile + 1, color);
 			else if( button->texturefile[0] )
 			{
 				if( button->texture == -1 )
@@ -1216,48 +1133,40 @@ void Touch_DrawButtons( touchbuttonlist_t *list )
 					button->texture = Draw_CachePic( button->texturefile);
 				}
 
-				if( B(flags) & TOUCH_FL_DRAW_ADDITIVE )
-					GL_SetRenderMode( kRenderTransAdd );
 
-				Touch_DrawTexture( B(x1), B(y1), B(x2), B(y2), B(texture), color[0], color[1], color[2], color[3] );
-
-				GL_SetRenderMode( kRenderTransTexture );
+				Touch_DrawTexture( B(x1), B(y1), B(x2), B(y2), B(texture), color[0], color[1], color[2], color[3], !!(B(flags) & TOUCH_FL_DRAW_ADDITIVE) );
 			}
 			if( B(flags) & TOUCH_FL_STROKE )
 			{
-				pglColor4ub( touch.scolor[0], touch.scolor[1], touch.scolor[2], touch.scolor[3] * B( fade ) );
-				R_DrawStretchPic( TO_SCRN_X(B(x1)),
+				Touch_SetRectColor( touch.scolor[0], touch.scolor[1], touch.scolor[2], touch.scolor[3] * B( fade ) );
+				Touch_FillRect( TO_SCRN_X(B(x1)),
 					TO_SCRN_Y(B(y1)),
 					touch.swidth,
-					TO_SCRN_Y(B(y2)-B(y1)) - touch.swidth,
-					0, 0, 1, 1, FILL_IMAGE );
-				R_DrawStretchPic( TO_SCRN_X(B(x1)) + touch.swidth,
+					TO_SCRN_Y(B(y2)-B(y1)) - touch.swidth );
+				Touch_FillRect( TO_SCRN_X(B(x1)) + touch.swidth,
 					TO_SCRN_Y(B(y1)),
 					TO_SCRN_X(B(x2)-B(x1)) - touch.swidth,
-					touch.swidth,
-					0, 0, 1, 1, FILL_IMAGE );
-				R_DrawStretchPic( TO_SCRN_X(B(x2))-touch.swidth,
+					touch.swidth );
+				Touch_FillRect( TO_SCRN_X(B(x2))-touch.swidth,
 					TO_SCRN_Y(B(y1)) + touch.swidth,
 					touch.swidth,
-					TO_SCRN_Y(B(y2)-B(y1)) - touch.swidth,
-					0, 0, 1, 1, FILL_IMAGE );
-				R_DrawStretchPic( TO_SCRN_X(B(x1)),
+					TO_SCRN_Y(B(y2)-B(y1)) - touch.swidth );
+				Touch_FillRect( TO_SCRN_X(B(x1)),
 					TO_SCRN_Y(B(y2))-touch.swidth,
 					TO_SCRN_X(B(x2)-B(x1)) - touch.swidth,
-					touch.swidth,
-					0, 0, 1, 1, FILL_IMAGE );
-				pglColor4ub( 255, 255, 255, 255 );
+					touch.swidth );
+				Touch_SetRectColor( 255, 255, 255, 255 );
 			}
 		}
 		if( touch.state >= state_edit && !( button->flags & TOUCH_FL_NOEDIT )  )
 		{
 			rgba_t color;
 			if( !( button->flags & TOUCH_FL_HIDE ) )
-				Touch_DrawTexture( B(x1), B(y1), B(x2), B(y2), FILL_IMAGE, 255, 255, 0, 32 );
+				Touch_DrawTexture( B(x1), B(y1), B(x2), B(y2), touch.fillImage, 255, 255, 0, 32, false );
 			else
-				Touch_DrawTexture( B(x1), B(y1), B(x2), B(y2), FILL_IMAGE, 128, 128, 128, 128 );
-			MakeRGBA( color, 255, 255,127, 255 );
-			Con_DrawString( TO_SCRN_X( B(x1) ), TO_SCRN_Y( B(y1) ), B(name), color );
+				Touch_DrawTexture( B(x1), B(y1), B(x2), B(y2), touch.fillImage, 128, 128, 128, 128, false );
+			Vector4Set( color, 255, 255,127, 255 );
+			Touch_DrawString( TO_SCRN_X( B(x1) ), TO_SCRN_Y( B(y1) ), B(name), color );
 		}
 	}
 	
@@ -1266,11 +1175,17 @@ void Touch_DrawButtons( touchbuttonlist_t *list )
 void Touch_Draw( void )
 {
 	touch_button_t *button;
-static int init = 100;
-    if(init == 1 )
-	Touch_InitConfig();
-    init--;
-	if(init > 0 )return;
+	static int init = 100;
+
+	// hack: ensure that configs initialized
+	if( init == 1 )
+		Touch_InitConfig();
+
+	if( init > 0 )
+	{
+		init--;
+		return;
+	}
 
 	if( !touch.initialized || (!touch_enable->integer && !touch.clientonly) )
 		return;
@@ -1278,28 +1193,24 @@ static int init = 100;
 	if( key_dest != key_game && touch_in_menu->integer == 0 )
 		return;
 
-	GL_SetRenderMode( kRenderTransTexture );
-
 	if( touch.state >= state_edit && touch_grid_enable->integer )
 	{
 		float x;
 		if( touch_in_menu->integer )
-			Touch_DrawTexture( 0, 0, 1, 1, FILL_IMAGE, 32, 32, 32, 255 );
+			Touch_DrawTexture( 0, 0, 1, 1, touch.fillImage, 32, 32, 32, 255, false );
 		else
-			Touch_DrawTexture( 0, 0, 1, 1, FILL_IMAGE, 0, 0, 0, 112 );
-		pglColor4ub( 0, 224, 224, 112 );
+			Touch_DrawTexture( 0, 0, 1, 1, touch.fillImage, 0, 0, 0, 112, false );
+		Touch_SetRectColor( 0, 224, 224, 112 );
 		for ( x = 0; x < 1 ; x += GRID_X )
-			R_DrawStretchPic( TO_SCRN_X(x),
+			Touch_FillRect( TO_SCRN_X(x),
 				0,
 				1,
-				TO_SCRN_Y(1),
-				0, 0, 1, 1, FILL_IMAGE );
+				TO_SCRN_Y(1));
 		for ( x = 0; x < 1 ; x += GRID_Y )
-			R_DrawStretchPic( 0,
+			Touch_FillRect( 0,
 				TO_SCRN_Y(x),
 				TO_SCRN_X(1),
-				1,
-				0, 0, 1, 1, FILL_IMAGE );
+				1 );
 	}
 
 	Touch_DrawButtons( &touch.list_user );
@@ -1308,7 +1219,7 @@ static int init = 100;
 	{
 		rgba_t color;
 
-		MakeRGBA( color, 255, 255, 255, 255 );
+		Vector4Set( color, 255, 255, 255, 255 );
 
 		if( touch.edit )
 		{
@@ -1317,10 +1228,10 @@ static int init = 100;
 					x2 = touch.edit->x2,
 					y2 = touch.edit->y2;
 			IN_TouchCheckCoords( &x1, &y1, &x2, &y2 );
-			Touch_DrawTexture( x1, y1, x2, y2, FILL_IMAGE, 0, 255, 0, 32 );
+			Touch_DrawTexture( x1, y1, x2, y2, touch.fillImage, 0, 255, 0, 32, false );
 		}
 
-		Touch_DrawTexture( 0, 0, GRID_X, GRID_Y, FILL_IMAGE, 255, 255, 255, 64 );
+		Touch_DrawTexture( 0, 0, GRID_X, GRID_Y, touch.fillImage, 255, 255, 255, 64, false );
 
 
 		if( touch.showbuttons )
@@ -1330,19 +1241,19 @@ static int init = 100;
 		if( touch.selection )
 		{
 			button = touch.selection;
-			Touch_DrawTexture( B(x1), B(y1), B(x2), B(y2), FILL_IMAGE, 255, 0, 0, 64 );
+			Touch_DrawTexture( B(x1), B(y1), B(x2), B(y2), touch.fillImage, 255, 0, 0, 64, false );
 
-			Con_DrawString( 0, TO_SCRN_Y(GRID_Y * 11), "Selection:", color );
-			Con_DrawString( Con_DrawString( 0, TO_SCRN_Y(GRID_Y*12), "Name: ", color ),
+			Touch_DrawString( 0, TO_SCRN_Y(GRID_Y * 11), "Selection:", color );
+			Touch_DrawString( Touch_DrawString( 0, TO_SCRN_Y(GRID_Y*12), "Name: ", color ),
 											   TO_SCRN_Y(GRID_Y*12), B(name), color );
-			Con_DrawString( Con_DrawString( 0, TO_SCRN_Y(GRID_Y*13), "Texture: ", color ),
+			Touch_DrawString( Touch_DrawString( 0, TO_SCRN_Y(GRID_Y*13), "Texture: ", color ),
 											   TO_SCRN_Y(GRID_Y*13), B(texturefile), color );
-			Con_DrawString( Con_DrawString( 0, TO_SCRN_Y(GRID_Y*14), "Command: ", color ),
+			Touch_DrawString( Touch_DrawString( 0, TO_SCRN_Y(GRID_Y*14), "Command: ", color ),
 											   TO_SCRN_Y(GRID_Y*14), B(command), color );
 		}
 	}
 
-	pglColor4ub( 255, 255, 255, 255 );
+	Touch_SetRectColor( 255, 255, 255, 255 );
 
 	if( ( touch.move_finger != -1 ) && touch.move && touch_move_indicator->value )
 	{
@@ -1358,14 +1269,16 @@ static int init = 100;
 			width = (touch.move->x2 - touch.move->x1)/2;
 			height = (touch.move->y2 - touch.move->y1)/2;
 		}
-		pglColor4ub( 255, 255, 255, 128 );
-		R_DrawStretchPic( TO_SCRN_X( touch.move_start_x - GRID_X * touch_move_indicator->value ),
+		DrawQ_Pic( TO_SCRN_X( touch.move_start_x - GRID_X * touch_move_indicator->value ),
 						  TO_SCRN_Y( touch.move_start_y - GRID_Y * touch_move_indicator->value ),
-						  TO_SCRN_X( GRID_X * 2 * touch_move_indicator->value ), TO_SCRN_Y( GRID_Y * 2 * touch_move_indicator->value ), 0, 0, 1, 1, touch.joytexture );
-		pglColor4ub( 255, 255, 255, 255 );
-		R_DrawStretchPic( TO_SCRN_X( touch.move_start_x + touch.side * width - GRID_X * touch_move_indicator->value ),
+						  touch.joytexture,
+						  TO_SCRN_X( GRID_X * 2 * touch_move_indicator->value ), TO_SCRN_Y( GRID_Y * 2 * touch_move_indicator->value ),
+						  1, 1, 1, 0.5, 0 );
+		DrawQ_Pic( TO_SCRN_X( touch.move_start_x + touch.side * width - GRID_X * touch_move_indicator->value ),
 						  TO_SCRN_Y( touch.move_start_y - touch.forward * height - GRID_Y * touch_move_indicator->value ),
-						  TO_SCRN_X( GRID_X * 2 * touch_move_indicator->value ), TO_SCRN_Y( GRID_Y * 2 * touch_move_indicator->value ), 0, 0, 1, 1, touch.joytexture );
+						  touch.joytexture,
+						  TO_SCRN_X( GRID_X * 2 * touch_move_indicator->value ), TO_SCRN_Y( GRID_Y * 2 * touch_move_indicator->value ),
+						  1, 1, 1, 1, 0);
 
 	}
 
@@ -1408,9 +1321,9 @@ static void Touch_EditMove( touchEventType type, int fingerID, float x, float y,
 				touch.hidebutton->flags &= ~TOUCH_FL_HIDE;
 
 				if( button->flags & TOUCH_FL_HIDE )
-					Q_strcpy( touch.hidebutton->texturefile, "touch_default/edit_show.tga" );
+					strlcpy( touch.hidebutton->texturefile, "touch_default/edit_show.tga", sizeof( touch.hidebutton->texturefile ) );
 				else
-					Q_strcpy( touch.hidebutton->texturefile, "touch_default/edit_hide.tga" );
+					strlcpy( touch.hidebutton->texturefile, "touch_default/edit_hide.tga", sizeof( touch.hidebutton->texturefile ) );
 			}
 		}
 		if( type == event_motion ) // shutdown button move
@@ -1455,9 +1368,9 @@ static void Touch_Motion( touchEventType type, int fingerID, float x, float y, f
 	{
 		// check bounds
 		if( touch_forwardzone->value <= 0 )
-			Cvar_SetFloat( "touch_forwardzone", 0.5 );
+			Cvar_SetValue( "touch_forwardzone", 0.5 );
 		if( touch_sidezone->value <= 0 )
-			Cvar_SetFloat( "touch_sidezone", 0.3 );
+			Cvar_SetValue( "touch_sidezone", 0.3 );
 
 		if( !touch.move || touch.move->type == touch_move )
 		{
@@ -1549,7 +1462,7 @@ static qboolean Touch_ButtonPress( touchbuttonlist_t *list, touchEventType type,
 					char command[256];
 
 					// command down: just execute command
-					Q_snprintf( command, sizeof( command ), "%s\n", button->command );
+					dpsnprintf( command, sizeof( command ), "%s\n", button->command );
 					Cbuf_AddText( command );
 
 					// increase precision
@@ -1584,7 +1497,7 @@ static qboolean Touch_ButtonPress( touchbuttonlist_t *list, touchEventType type,
 						for( newbutton = list->first; newbutton; newbutton = newbutton->next )
 							if( ( newbutton->type == touch_move ) || ( newbutton->type == touch_look ) ) newbutton->finger = -1;
 
-						Msg( "Touch: touch_move on look finger %d!\n", fingerID );
+						Con_Printf( "Touch: touch_move on look finger %d!\n", fingerID );
 						continue;
 					}
 
@@ -1645,7 +1558,7 @@ static qboolean Touch_ButtonPress( touchbuttonlist_t *list, touchEventType type,
 						for( newbutton = list->first; newbutton; newbutton = newbutton->next )
 							if( ( newbutton->type == touch_move ) || ( newbutton->type == touch_look ) ) newbutton->finger = -1;
 
-						Msg( "touch: touch_look on move finger %d!\n", fingerID );
+						Con_Printf( "touch: touch_look on move finger %d!\n", fingerID );
 						continue;
 					}
 
@@ -1669,7 +1582,7 @@ static qboolean Touch_ButtonPress( touchbuttonlist_t *list, touchEventType type,
 					{
 						char command[256];
 
-						Q_snprintf( command, sizeof( command ), "%s\n", button->command );
+						dpsnprintf( command, sizeof( command ), "%s\n", button->command );
 						command[0] = '-';
 						Cbuf_AddText( command );
 					}
@@ -1850,9 +1763,6 @@ int IN_TouchEvent( touchEventType type, int fingerID, float x, float y, float dx
 		return 0;
 	}
 
-	//if( clgame.dllFuncs.pfnTouchEvent && clgame.dllFuncs.pfnTouchEvent( type, fingerID, x, y, dx, dy ) )
-	//	return true;
-
 	return Touch_ControlsEvent( type, fingerID, x, y, dx, dy );
 }
 
@@ -1866,9 +1776,10 @@ void Touch_Move( void )
 	touch.yaw = touch.pitch = 0;
 }
 
+#if 0
 void Touch_KeyEvent( int key, int down )
 {
-	int xi, yi;
+	int xi = 0, yi = 0;
 	float x = 0, y = 0;
 
 	if( touch_enable->integer )
@@ -1884,32 +1795,12 @@ void Touch_KeyEvent( int key, int down )
 
 	Touch_ControlsEvent( !down, key == K_MOUSE1?0:1, x, y, 0, 0 );
 }
-
+#endif
 void Touch_Shutdown( void )
 {
 	if( !touch.initialized ) 
 		return;
 	Touch_RemoveAll_f();
-	Cmd_RemoveCommand( "touch_addbutton" );
-	Cmd_RemoveCommand( "touch_removebutton" );
-	Cmd_RemoveCommand( "touch_enableedit" );
-	Cmd_RemoveCommand( "touch_disableedit" );
-	Cmd_RemoveCommand( "touch_settexture" );
-	Cmd_RemoveCommand( "touch_setcolor" );
-	Cmd_RemoveCommand( "touch_setcommand" );
-	Cmd_RemoveCommand( "touch_setflags" );
-	Cmd_RemoveCommand( "touch_show" );
-	Cmd_RemoveCommand( "touch_hide" );
-	Cmd_RemoveCommand( "touch_list" );
-	Cmd_RemoveCommand( "touch_removeall" );
-	Cmd_RemoveCommand( "touch_loaddefaults" );
-	Cmd_RemoveCommand( "touch_roundall" );
-	Cmd_RemoveCommand( "touch_exportconfig" );
-	Cmd_RemoveCommand( "touch_set_stroke" );
-	Cmd_RemoveCommand( "touch_setclientonly" );
-	Cmd_RemoveCommand( "touch_reloadconfig" );
-	Cmd_RemoveCommand( "touch_writeconfig" );
-	Cmd_RemoveCommand( "touch_generate_code" );
 
 	touch.initialized = false;
 	Mem_FreePool( &touch.mempool );
