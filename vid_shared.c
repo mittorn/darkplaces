@@ -649,7 +649,7 @@ qboolean GL_CheckExtension(const char *name, const char *disableparm, int silent
 		Con_DPrint("not detected\n");
 		return false;
 	}
-
+#ifndef USE_GLES2
 	for (func = openglfuncs; func && func->name != NULL; func++)
 	{
 		if (!*func->funcvariable && !strcmp(name, func->extension))
@@ -659,6 +659,7 @@ qboolean GL_CheckExtension(const char *name, const char *disableparm, int silent
 			failed = true;
 		}
 	}
+#endif
 	// delay the return so it prints all missing functions
 	if (failed)
 		return false;
@@ -704,6 +705,7 @@ void GL_Setup(void)
 	{
 		int j;
 		GLint numextensions = 0;
+#ifndef USE_GLES2
 		qglGetIntegerv(GL_NUM_EXTENSIONS, &numextensions);
 		Con_DPrint("GL_EXTENSIONS:");
 		for (j = 0; j < numextensions; j++)
@@ -711,6 +713,7 @@ void GL_Setup(void)
 			const char *ext = (const char *)qglGetStringi(GL_EXTENSIONS, j);
 			Con_DPrintf(" %s", ext);
 		}
+#endif
 		Con_DPrint("\n");
 	}
 

@@ -78,7 +78,7 @@ void GL_PrintError(int errornumber, const char *filename, int linenumber)
 		break;
 	}
 }
-
+#ifndef USE_GLES2
 static void GLAPIENTRY GL_DebugOutputCallback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const GLvoid* userParam)
 {
 	const char *sev = "ENUM?", *typ = "ENUM?", *src = "ENUM?";
@@ -108,6 +108,7 @@ static void GLAPIENTRY GL_DebugOutputCallback(GLenum source, GLenum type, GLuint
 	}
 	Con_Printf("GLDEBUG: %s %s %s: %u: %s\n", sev, typ, src, (unsigned int)id, message);
 }
+#endif
 #endif
 
 #define BACKENDACTIVECHECK if (!gl_state.active) Sys_Error("GL backend function called when backend is not active");
@@ -265,9 +266,11 @@ static void gl_backend_start(void)
 	switch(vid.renderpath)
 	{
 	case RENDERPATH_GL32:
+#ifndef USE_GLES2
 		// GL3.2 Core requires that we have a VAO bound - but using more than one has no performance benefit so this is just placeholder
 		qglGenVertexArrays(1, &gl_state.defaultvao);
 		qglBindVertexArray(gl_state.defaultvao);
+#endif
 		// fall through
 	case RENDERPATH_GLES2:
 		// fetch current fbo here (default fbo is not 0 on some GLES devices)
@@ -955,7 +958,11 @@ static void GL_BindUBO(int bufferobject)
 	}
 }
 
+#ifdef USE_GLES2
+static const GLuint drawbuffers[4] = {GL_COLOR_ATTACHMENT0, 0, 0, 0};
+#else
 static const GLuint drawbuffers[4] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2, GL_COLOR_ATTACHMENT3};
+#endif
 int R_Mesh_CreateFramebufferObject(rtexture_t *depthtexture, rtexture_t *colortexture, rtexture_t *colortexture2, rtexture_t *colortexture3, rtexture_t *colortexture4)
 {
 	int temp;
@@ -985,15 +992,17 @@ int R_Mesh_CreateFramebufferObject(rtexture_t *depthtexture, rtexture_t *colorte
 		}
 #endif
 		if (colortexture  && colortexture->texnum ) qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 , colortexture->gltexturetypeenum , colortexture->texnum , 0);CHECKGLERROR
+#ifndef USE_GLES2
 		if (colortexture2 && colortexture2->texnum) qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1 , colortexture2->gltexturetypeenum, colortexture2->texnum, 0);CHECKGLERROR
 		if (colortexture3 && colortexture3->texnum) qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2 , colortexture3->gltexturetypeenum, colortexture3->texnum, 0);CHECKGLERROR
 		if (colortexture4 && colortexture4->texnum) qglFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT3 , colortexture4->gltexturetypeenum, colortexture4->texnum, 0);CHECKGLERROR
+#endif
 		if (colortexture  && colortexture->renderbuffernum ) qglFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 , GL_RENDERBUFFER, colortexture->renderbuffernum );CHECKGLERROR
+#ifndef USE_GLES2
 		if (colortexture2 && colortexture2->renderbuffernum) qglFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1 , GL_RENDERBUFFER, colortexture2->renderbuffernum);CHECKGLERROR
 		if (colortexture3 && colortexture3->renderbuffernum) qglFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2 , GL_RENDERBUFFER, colortexture3->renderbuffernum);CHECKGLERROR
 		if (colortexture4 && colortexture4->renderbuffernum) qglFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT3 , GL_RENDERBUFFER, colortexture4->renderbuffernum);CHECKGLERROR
 
-#ifndef USE_GLES2
 		if (colortexture4)
 		{
 			qglDrawBuffers(4, drawbuffers);CHECKGLERROR
@@ -1102,6 +1111,7 @@ static void GL_Backend_ResetState(void)
 	case RENDERPATH_GL32:
 	case RENDERPATH_GLES2:
 		// set up debug output early
+#ifndef USE_GLES2
 		if (vid.support.arb_debug_output)
 		{
 			GLuint unused = 0;
@@ -1120,6 +1130,7 @@ static void GL_Backend_ResetState(void)
 				qglDebugMessageControlARB(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, &unused, GL_FALSE);
 			qglDebugMessageCallbackARB(GL_DebugOutputCallback, NULL);
 		}
+#endif
 		CHECKGLERROR
 		qglColorMask(1, 1, 1, 1);CHECKGLERROR
 		qglBlendFunc(gl_state.blendfunc1, gl_state.blendfunc2);CHECKGLERROR
@@ -1496,7 +1507,7 @@ void GL_Clear(int mask, const float *colorvalue, float depthvalue, int stencilva
 		if (mask & GL_DEPTH_BUFFER_BIT)
 		{
 #ifdef USE_GLES2
-			qglClearDepthf(depthvalue);CHECKGLERROR
+//			qglClearDepthf(depthvalue);CHECKGLERROR
 #else
 			qglClearDepth(depthvalue);CHECKGLERROR
 #endif
