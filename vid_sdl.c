@@ -368,7 +368,9 @@ qboolean VID_ShowingKeyboard(void)
 
 void VID_SetMouse(qboolean fullscreengrab, qboolean relative, qboolean hidecursor)
 {
-#if 0 ///ndef DP_MOBILETOUCH
+	if( touch_enable->integer )
+		return;
+#ifndef DP_MOBILETOUCH
 #ifdef MACOSX
 	if(relative)
 		if(vid_usingmouse && (vid_usingnoaccel != !!apple_mouse_noaccel.integer))
