@@ -509,9 +509,9 @@ unsigned char *LoadTGA_BGRA (const unsigned char *f, int filesize, int *miplevel
 		}
 		// fall through to colormap case
 	case 1:
-		if (targa_header.pixel_size != 8)
+		if (targa_header.pixel_size != 8 && targa_header.pixel_size != 16)
 		{
-			Con_Print("LoadTGA: only 8bit pixel size for type 1, 3, 9, and 11 images supported\n");
+			Con_Print("LoadTGA: only 8/16bit pixel size for type 1, 3, 9, and 11 images supported\n");
 			PrintTargaHeader(&targa_header);
 			return NULL;
 		}
@@ -610,6 +610,8 @@ unsigned char *LoadTGA_BGRA (const unsigned char *f, int filesize, int *miplevel
 					if (x + runlen > image_width)
 						break; // error - line exceeds width
 					bgra.i = palettei[*fin++];
+					if( targa_header.pixel_size == 16 )
+						bgra.b[3] = *fin++;
 					for (;runlen--;x++)
 						*pixbufi++ = bgra.i;
 				}
@@ -622,7 +624,13 @@ unsigned char *LoadTGA_BGRA (const unsigned char *f, int filesize, int *miplevel
 					if (x + runlen > image_width)
 						break; // error - line exceeds width
 					for (;runlen--;x++)
-						*pixbufi++ = palettei[*fin++];
+					{
+						bgra.i = palettei[*fin++];
+					if( targa_header.pixel_size == 16 )
+						bgra.b[3] = *fin++;
+						*pixbufi++ = bgra.i;
+
+					}
 				}
 			}
 
