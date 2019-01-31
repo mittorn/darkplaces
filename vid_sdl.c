@@ -23,7 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "quakedef.h"
 #include "image.h"
 #include "utf8lib.h"
-
+#include "touch.h"
 #ifndef __IPHONEOS__
 #ifdef MACOSX
 #include <Carbon/Carbon.h>
@@ -368,7 +368,7 @@ qboolean VID_ShowingKeyboard(void)
 
 void VID_SetMouse(qboolean fullscreengrab, qboolean relative, qboolean hidecursor)
 {
-#ifndef DP_MOBILETOUCH
+#if 0 ///ndef DP_MOBILETOUCH
 #ifdef MACOSX
 	if(relative)
 		if(vid_usingmouse && (vid_usingnoaccel != !!apple_mouse_noaccel.integer))
@@ -943,9 +943,11 @@ void IN_Move( void )
 		}
 	}
 	oldkeydest = keydest;
-	oldshowkeyboard = !!vid_touchscreen_showkeyboard.integer;
 
-	if (vid_touchscreen.integer)
+	oldshowkeyboard = !!vid_touchscreen_showkeyboard.integer;
+	if( touch_enable->integer )
+		Touch_Move();
+	else if (vid_touchscreen.integer)
 	{
 		switch(gamemode)
 		{
@@ -1036,7 +1038,7 @@ static keynum_t buttonremap[] =
 	K_MOUSE16,
 };
 
-//#define DEBUGSDLEVENTS
+
 
 // SDL2
 void Sys_SendKeyEvents( void )
@@ -1210,6 +1212,8 @@ void Sys_SendKeyEvents( void )
 #ifdef DEBUGSDLEVENTS
 				Con_DPrintf("SDL_FINGERDOWN for finger %i\n", (int)event.tfinger.fingerId);
 #endif
+				IN_TouchEvent( 0, event.tfinger.fingerId, event.tfinger.x, event.tfinger.y, event.tfinger.dx, event.tfinger.dy);
+				
 				for (i = 0;i < MAXFINGERS-1;i++)
 				{
 					if (!multitouch[i][0])
@@ -1228,6 +1232,7 @@ void Sys_SendKeyEvents( void )
 #ifdef DEBUGSDLEVENTS
 				Con_DPrintf("SDL_FINGERUP for finger %i\n", (int)event.tfinger.fingerId);
 #endif
+				IN_TouchEvent( 1, event.tfinger.fingerId, event.tfinger.x, event.tfinger.y, event.tfinger.dx, event.tfinger.dy);
 				for (i = 0;i < MAXFINGERS-1;i++)
 				{
 					if (multitouch[i][0] == event.tfinger.fingerId + 1)
@@ -1243,6 +1248,7 @@ void Sys_SendKeyEvents( void )
 #ifdef DEBUGSDLEVENTS
 				Con_DPrintf("SDL_FINGERMOTION for finger %i\n", (int)event.tfinger.fingerId);
 #endif
+				IN_TouchEvent( 2, event.tfinger.fingerId, event.tfinger.x, event.tfinger.y, event.tfinger.dx, event.tfinger.dy);
 				for (i = 0;i < MAXFINGERS-1;i++)
 				{
 					if (multitouch[i][0] == event.tfinger.fingerId + 1)
@@ -1301,6 +1307,7 @@ static qboolean vid_sdl_initjoysticksystem = false;
 
 void VID_Init (void)
 {
+	Touch_Init();
 #ifndef __IPHONEOS__
 #ifdef MACOSX
 	Cvar_RegisterVariable(&apple_mouse_noaccel);

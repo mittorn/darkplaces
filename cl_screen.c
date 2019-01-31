@@ -2216,6 +2216,7 @@ static void SCR_DrawScreen (void)
 		SHOWLMP_drawall();
 		SCR_CheckDrawCenterString();
 	}
+	Touch_Draw();
 	SCR_DrawNetGraph ();
 #ifdef CONFIG_MENU
 	MR_Draw();

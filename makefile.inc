@@ -152,6 +152,7 @@ OBJ_COMMON= \
 	view.o \
 	wad.o \
 	world.o \
+	touch.c \
 	zone.o
 
 OBJ_MENU= \
