@@ -1051,7 +1051,7 @@ void Touch_DrawTexture ( float x1, float y1, float x2, float y2, cachepic_t *tex
 		texture,
 		TO_SCRN_X(x2 - x1),
 		TO_SCRN_Y(y2 - y1),
-		r,g,b,a, additive?DRAWFLAG_ADDITIVE:0);
+		BF*r,BF*g,BF*b,BF*a, additive?DRAWFLAG_ADDITIVE:0);
 }
 
 #if defined(_MSC_VER) && (_MSC_VER < 1700) 
